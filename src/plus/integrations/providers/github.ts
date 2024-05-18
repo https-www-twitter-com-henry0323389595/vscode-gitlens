@@ -1,4 +1,5 @@
 import type { AuthenticationSession, CancellationToken } from 'vscode';
+import { authentication } from 'vscode';
 import type { Container } from '../../../container';
 import type { Account } from '../../../git/models/author';
 import type { DefaultBranch } from '../../../git/models/defaultBranch';
@@ -7,9 +8,10 @@ import type { PullRequestMergeMethod, PullRequestState, SearchedPullRequest } fr
 import { PullRequest } from '../../../git/models/pullRequest';
 import type { RepositoryMetadata } from '../../../git/models/repositoryMetadata';
 import { log } from '../../../system/decorators/log';
+import { ensurePaidPlan } from '../../utils';
 import type { IntegrationAuthenticationProviderDescriptor } from '../authentication/integrationAuthentication';
 import type { SupportedIntegrationIds } from '../integration';
-import { ensurePaidPlan, HostingIntegration } from '../integration';
+import { HostingIntegration } from '../integration';
 import { HostingIntegrationId, providersMetadata, SelfHostedIntegrationId } from './models';
 import type { ProvidersApi } from './providersApi';
 
@@ -131,10 +133,18 @@ abstract class GitHubIntegrationBase<ID extends SupportedIntegrationIds> extends
 	protected override async getProviderRepositoryMetadata(
 		{ accessToken }: AuthenticationSession,
 		repo: GitHubRepositoryDescriptor,
+		cancellation?: CancellationToken,
 	): Promise<RepositoryMetadata | undefined> {
-		return (await this.container.github)?.getRepositoryMetadata(this, accessToken, repo.owner, repo.name, {
-			baseUrl: this.apiBaseUrl,
-		});
+		return (await this.container.github)?.getRepositoryMetadata(
+			this,
+			accessToken,
+			repo.owner,
+			repo.name,
+			{
+				baseUrl: this.apiBaseUrl,
+			},
+			cancellation,
+		);
 	}
 
 	protected override async searchProviderMyPullRequests(
@@ -209,6 +219,17 @@ export class GitHubIntegration extends GitHubIntegrationBase<HostingIntegrationI
 	protected override get apiBaseUrl(): string {
 		return 'https://api.github.com';
 	}
+
+	// TODO: This is a special case for GitHub because we use VSCode's GitHub session, and it can be disconnected
+	// outside of the extension. Remove this once we use our own GitHub auth provider.
+	override async refresh() {
+		const session = await authentication.getSession(this.authProvider.id, this.authProvider.scopes);
+		if (session == null && this.maybeConnected) {
+			void this.disconnect();
+		} else {
+			super.refresh();
+		}
+	}
 }
 
 export class GitHubEnterpriseIntegration extends GitHubIntegrationBase<SelfHostedIntegrationId.GitHubEnterprise> {
@@ -234,7 +255,12 @@ export class GitHubEnterpriseIntegration extends GitHubIntegrationBase<SelfHoste
 
 	@log()
 	override async connect(): Promise<boolean> {
-		if (!(await ensurePaidPlan(`${this.name} instance`, this.container))) {
+		if (
+			!(await ensurePaidPlan(this.container, `Rich integration with ${this.name} is a Pro feature.`, {
+				source: 'integrations',
+				detail: { action: 'connect', integration: this.id },
+			}))
+		) {
 			return false;
 		}
 

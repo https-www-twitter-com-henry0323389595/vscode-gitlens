@@ -57,12 +57,7 @@ export class IpcRequest<Params = void, ResponseParams = void> extends IpcCall<Pa
 	constructor(scope: IpcScope, method: string, reset?: boolean, pack?: boolean) {
 		super(scope, method, reset, pack);
 
-		this.response = new IpcNotification<ResponseParams>(
-			this.scope,
-			`${this.method}/completion`,
-			this.reset,
-			this.pack,
-		);
+		this.response = new IpcNotification<ResponseParams>(this.scope, `${method}/completion`, this.reset, this.pack);
 	}
 }
 
@@ -73,13 +68,13 @@ export class IpcNotification<Params = void> extends IpcCall<Params> {}
 
 // COMMANDS
 
-export const WebviewReadyCommand = new IpcCommand('core', 'ready');
+export const WebviewReadyCommand = new IpcCommand('core', 'webview/ready');
 
 export interface WebviewFocusChangedParams {
 	focused: boolean;
 	inputFocused: boolean;
 }
-export const WebviewFocusChangedCommand = new IpcCommand<WebviewFocusChangedParams>('core', 'focus/changed');
+export const WebviewFocusChangedCommand = new IpcCommand<WebviewFocusChangedParams>('core', 'webview/focus/changed');
 
 export interface ExecuteCommandParams {
 	command: string;
@@ -98,6 +93,22 @@ export interface UpdateConfigurationParams {
 export const UpdateConfigurationCommand = new IpcCommand<UpdateConfigurationParams>('core', 'configuration/update');
 
 // NOTIFICATIONS
+
+export interface DidChangeHostWindowFocusParams {
+	focused: boolean;
+}
+export const DidChangeHostWindowFocusNotification = new IpcNotification<DidChangeHostWindowFocusParams>(
+	'core',
+	'window/focus/didChange',
+);
+
+export interface DidChangeWebviewFocusParams {
+	focused: boolean;
+}
+export const DidChangeWebviewFocusNotfication = new IpcCommand<DidChangeWebviewFocusParams>(
+	'core',
+	'webview/focus/didChange',
+);
 
 export interface DidChangeConfigurationParams {
 	config: Config;

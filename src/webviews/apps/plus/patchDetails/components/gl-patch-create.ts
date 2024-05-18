@@ -4,6 +4,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { map } from 'lit/directives/map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
+import { urls } from '../../../../../constants';
 import type { GitFileChangeShape } from '../../../../../git/models/file';
 import type { DraftRole, DraftVisibility } from '../../../../../gk/models/drafts';
 import type {
@@ -56,13 +57,11 @@ export interface CreatePatchUpdateSelectionEventDetail {
 // Can only import types from 'vscode'
 const BesideViewColumn = -2; /*ViewColumn.Beside*/
 
-export type GlPatchCreateEvents = {
-	[K in Extract<keyof WindowEventMap, `gl-patch-${string}` | `gl-patch-create-${string}`>]: WindowEventMap[K];
-};
-
 @customElement('gl-patch-create')
-export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
+export class GlPatchCreate extends GlTreeBase {
 	@property({ type: Object }) state?: Serialized<State>;
+
+	@property({ type: Boolean }) review = false;
 
 	// @state()
 	// patchTitle = this.create.title ?? '';
@@ -125,6 +124,12 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		super();
 
 		defineGkElement(Avatar, Button, Menu, MenuItem, Popover);
+	}
+
+	protected override firstUpdated() {
+		window.requestAnimationFrame(() => {
+			this.titleInput.focus();
+		});
 	}
 
 	renderUserSelection(userSelection: DraftUserSelection) {
@@ -206,6 +211,9 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 				visibilityIcon = 'globe';
 				break;
 		}
+
+		const draftName = this.review ? 'Code Suggestion' : 'Cloud Patch';
+		const draftNamePlural = this.review ? 'Code Suggestions' : 'Cloud Patches';
 		return html`
 			<div class="section section--action">
 				${when(
@@ -216,27 +224,40 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 							<p class="alert__content">${this.state!.create!.creationError}</p>
 						</div>`,
 				)}
-				<div class="message-input message-input--group">
-					<div class="message-input__select">
-						<span class="message-input__select-icon"><code-icon icon=${visibilityIcon}></code-icon></span>
-						<select id="visibility" class="message-input__control" @change=${this.onVisibilityChange}>
-							<option value="public" ?selected=${this.draftVisibility === 'public'}>
-								Anyone with the link
-							</option>
-							<option value="private" ?selected=${this.draftVisibility === 'private'}>
-								Members of my Org with the link
-							</option>
-							<option value="invite_only" ?selected=${this.draftVisibility === 'invite_only'}>
-								Collaborators only
-							</option>
-						</select>
-						<span class="message-input__select-caret"><code-icon icon="chevron-down"></code-icon></span>
-					</div>
-					<gl-button appearance="secondary" @click=${this.onInviteUsers}
-						><code-icon icon="person-add"></code-icon> Invite</gl-button
-					>
-				</div>
-				${this.renderUserSelectionList()}
+				${when(
+					this.review === false,
+					() => html`
+						<div class="message-input message-input--group">
+							<div class="message-input__select">
+								<span class="message-input__select-icon"
+									><code-icon icon=${visibilityIcon}></code-icon
+								></span>
+								<select
+									id="visibility"
+									class="message-input__control"
+									@change=${this.onVisibilityChange}
+								>
+									<option value="public" ?selected=${this.draftVisibility === 'public'}>
+										Anyone with the link
+									</option>
+									<option value="private" ?selected=${this.draftVisibility === 'private'}>
+										Members of my Org with the link
+									</option>
+									<option value="invite_only" ?selected=${this.draftVisibility === 'invite_only'}>
+										Collaborators only
+									</option>
+								</select>
+								<span class="message-input__select-caret"
+									><code-icon icon="chevron-down"></code-icon
+								></span>
+							</div>
+							<gl-button appearance="secondary" @click=${this.onInviteUsers}
+								><code-icon icon="person-add" slot="prefix"></code-icon> Invite</gl-button
+							>
+						</div>
+						${this.renderUserSelectionList()}
+					`,
+				)}
 				<div class="message-input">
 					<input
 						id="title"
@@ -261,20 +282,32 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 				<p class="button-container">
 					<span class="button-group button-group--single">
 						<gl-button full @click=${(e: Event) => this.onDebouncedCreateAll(e)}
-							>Create Cloud Patch</gl-button
+							>Create ${draftName}</gl-button
 						>
 					</span>
 				</p>
+				${when(
+					this.review === true,
+					() => html`
+						<p class="button-container">
+							<span class="button-group button-group--single">
+								<gl-button appearance="secondary" full @click=${() => this.onCancel()}
+									>Cancel</gl-button
+								>
+							</span>
+						</p>
+					`,
+				)}
 				${when(
 					this.state?.orgSettings.byob === false,
 					() =>
 						html`<p class="h-deemphasize">
 							<code-icon icon="lock"></code-icon>
 							<a
-								href="https://www.gitkraken.com/solutions/cloud-patches"
-								title="Learn more about Cloud Patches"
-								aria-label="Learn more about Cloud Patches"
-								>Cloud Patches</a
+								href="${urls.cloudPatches}"
+								title="Learn more about ${draftNamePlural}"
+								aria-label="Learn more about ${draftNamePlural}"
+								>${draftNamePlural}</a
 							>
 							are
 							<a
@@ -290,10 +323,10 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 							<code-icon icon="info"></code-icon>
 							Your
 							<a
-								href="https://www.gitkraken.com/solutions/cloud-patches"
-								title="Learn more about Cloud Patches"
-								aria-label="Learn more about Cloud Patches"
-								>Cloud Patch</a
+								href="${urls.cloudPatches}"
+								title="Learn more about ${draftNamePlural}"
+								aria-label="Learn more about ${draftNamePlural}"
+								>${draftName}</a
 							>
 							will be securely stored in your organization's self-hosted storage
 						</p>`,
@@ -322,7 +355,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 	private renderChangedFiles() {
 		return html`
 			<webview-pane class="h-no-border" expanded>
-				<span slot="title">Changes to Include</span>
+				<span slot="title">${this.review ? 'Changes to Suggest' : 'Changes to Include'}</span>
 				<action-nav slot="actions">${this.renderLayoutAction(this.fileLayout)}</action-nav>
 
 				${when(
@@ -377,7 +410,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		change.checked = checked;
 		this.requestUpdate('state');
 
-		this.fireEvent('gl-patch-create-repo-checked', {
+		this.emit('gl-patch-create-repo-checked', {
 			repoUri: repoUri,
 			checked: checked,
 		});
@@ -387,7 +420,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		if (!e.detail.context) return;
 
 		const [file] = e.detail.context;
-		this.fireEvent('gl-patch-file-compare-previous', { ...file });
+		this.emit('gl-patch-file-compare-previous', { ...file });
 	}
 
 	private renderTreeViewWithModel() {
@@ -533,7 +566,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 			visibility: this.create.visibility,
 			userSelections: this.create.userSelections,
 		};
-		this.fireEvent('gl-patch-create-patch', patch);
+		this.emit('gl-patch-create-patch', patch);
 	}
 
 	private onCreateAll(_e: Event) {
@@ -545,7 +578,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		this.createPatch();
 	}
 
-	private onDebouncedCreateAll = debounce(this.onCreateAll.bind(this), 250);
+	private onDebouncedCreateAll = debounce(this.onCreateAll, 250);
 
 	private onSelectCreateOption(_e: CustomEvent<{ target: MenuItem }>) {
 		// const target = e.detail?.target;
@@ -596,30 +629,22 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 	// 	this.requestUpdate('state');
 	// }
 
-	private onTitleInput(e: InputEvent) {
-		this.create.title = (e.target as HTMLInputElement).value;
-		this.fireEvent('gl-patch-create-update-metadata', {
-			title: this.create.title,
-			description: this.create.description,
-			visibility: this.create.visibility,
-		});
+	private onTitleInput(_e: InputEvent) {
+		this.create.title = this.titleInput.value;
+		this.fireMetadataUpdate();
 	}
 
-	private onDebounceTitleInput = debounce(this.onTitleInput.bind(this), 500);
+	private onDebounceTitleInput = debounce(this.onTitleInput, 500);
 
-	private onDescriptionInput(e: InputEvent) {
-		this.create.description = (e.target as HTMLInputElement).value;
-		this.fireEvent('gl-patch-create-update-metadata', {
-			title: this.create.title!,
-			description: this.create.description,
-			visibility: this.create.visibility,
-		});
+	private onDescriptionInput(_e: InputEvent) {
+		this.create.description = this.descInput.value;
+		this.fireMetadataUpdate();
 	}
 
-	private onDebounceDescriptionInput = debounce(this.onDescriptionInput.bind(this), 500);
+	private onDebounceDescriptionInput = debounce(this.onDescriptionInput, 500);
 
 	private onInviteUsers(_e: Event) {
-		this.fireEvent('gl-patch-create-invite-users');
+		this.emit('gl-patch-create-invite-users');
 	}
 
 	private onChangeSelectionRole(
@@ -627,7 +652,7 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		selection: DraftUserSelection,
 		role: CreatePatchUpdateSelectionEventDetail['role'],
 	) {
-		this.fireEvent('gl-patch-create-update-selection', { selection: selection, role: role });
+		this.emit('gl-patch-create-update-selection', { selection: selection, role: role });
 
 		const popoverEl: Popover | null = (e.target as HTMLElement)?.closest('gk-popover');
 		popoverEl?.hidePopover();
@@ -635,7 +660,11 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 
 	private onVisibilityChange(e: Event) {
 		this.create.visibility = (e.target as HTMLInputElement).value as DraftVisibility;
-		this.fireEvent('gl-patch-create-update-metadata', {
+		this.fireMetadataUpdate();
+	}
+
+	private fireMetadataUpdate() {
+		this.emit('gl-patch-create-update-metadata', {
 			title: this.create.title!,
 			description: this.create.description,
 			visibility: this.create.visibility,
@@ -658,6 +687,14 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 			case 'file-open':
 				this.onOpenFile(e);
 				break;
+
+			case 'file-stage':
+				this.onStageFile(e);
+				break;
+
+			case 'file-unstage':
+				this.onUnstageFile(e);
+				break;
 		}
 	}
 
@@ -665,7 +702,33 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 		if (!e.detail.context) return;
 
 		const [file] = e.detail.context;
-		this.fireEvent('gl-patch-file-open', {
+		this.emit('gl-patch-file-open', {
+			...file,
+			showOptions: {
+				preview: false,
+				viewColumn: e.detail.altKey ? BesideViewColumn : undefined,
+			},
+		});
+	}
+
+	onStageFile(e: CustomEvent<TreeItemActionDetail>) {
+		if (!e.detail.context) return;
+
+		const [file] = e.detail.context;
+		this.emit('gl-patch-file-stage', {
+			...file,
+			showOptions: {
+				preview: false,
+				viewColumn: e.detail.altKey ? BesideViewColumn : undefined,
+			},
+		});
+	}
+
+	onUnstageFile(e: CustomEvent<TreeItemActionDetail>) {
+		if (!e.detail.context) return;
+
+		const [file] = e.detail.context;
+		this.emit('gl-patch-file-unstage', {
 			...file,
 			showOptions: {
 				preview: false,
@@ -675,17 +738,27 @@ export class GlPatchCreate extends GlTreeBase<GlPatchCreateEvents> {
 	}
 
 	onShowInGraph(_e: CustomEvent<TreeItemActionDetail>) {
-		// this.fireEvent('gl-patch-details-graph-show-patch', { draft: this.state!.create! });
+		// this.emit('gl-patch-details-graph-show-patch', { draft: this.state!.create! });
 	}
 
-	override getFileActions(_file: GitFileChangeShape, _options?: Partial<TreeItemBase>) {
-		return [
-			{
-				icon: 'go-to-file',
-				label: 'Open file',
-				action: 'file-open',
-			},
-		];
+	onCancel() {
+		this.emit('gl-patch-create-cancelled');
+	}
+
+	override getFileActions(file: GitFileChangeShape, _options?: Partial<TreeItemBase>) {
+		const openFile = {
+			icon: 'go-to-file',
+			label: 'Open file',
+			action: 'file-open',
+		};
+
+		if (this.review) {
+			return [openFile];
+		}
+		if (file.staged === true) {
+			return [openFile, { icon: 'remove', label: 'Unstage changes', action: 'file-unstage' }];
+		}
+		return [openFile, { icon: 'plus', label: 'Stage changes', action: 'file-stage' }];
 	}
 
 	override getRepoActions(_name: string, _path: string, _options?: Partial<TreeItemBase>) {
@@ -704,15 +777,18 @@ declare global {
 		'gl-patch-create': GlPatchCreate;
 	}
 
-	interface WindowEventMap {
+	interface GlobalEventHandlersEventMap {
 		'gl-patch-create-repo-checked': CustomEvent<CreatePatchCheckRepositoryEventDetail>;
 		'gl-patch-create-patch': CustomEvent<CreatePatchEventDetail>;
 		'gl-patch-create-update-metadata': CustomEvent<CreatePatchMetadataEventDetail>;
 		'gl-patch-file-compare-previous': CustomEvent<ExecuteFileActionParams>;
 		'gl-patch-file-compare-working': CustomEvent<ExecuteFileActionParams>;
 		'gl-patch-file-open': CustomEvent<ExecuteFileActionParams>;
+		'gl-patch-file-stage': CustomEvent<ExecuteFileActionParams>;
+		'gl-patch-file-unstage': CustomEvent<ExecuteFileActionParams>;
 		'gl-patch-create-invite-users': CustomEvent<undefined>;
 		'gl-patch-create-update-selection': CustomEvent<CreatePatchUpdateSelectionEventDetail>;
+		'gl-patch-create-cancelled': CustomEvent<undefined>;
 		// 'gl-patch-details-graph-show-patch': CustomEvent<{ draft: State['create'] }>;
 	}
 }

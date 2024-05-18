@@ -1,23 +1,23 @@
 import type { AuthenticationSessionsChangeEvent, CancellationToken, Event } from 'vscode';
 import { authentication, Disposable, env, EventEmitter, window } from 'vscode';
 import { isWeb } from '@env/platform';
-import { Commands } from '../../constants';
+import type { Source } from '../../constants';
 import type { Container } from '../../container';
 import type { SearchedIssue } from '../../git/models/issue';
 import type { SearchedPullRequest } from '../../git/models/pullRequest';
 import type { GitRemote } from '../../git/models/remote';
 import type { RemoteProvider, RemoteProviderId } from '../../git/remotes/remoteProvider';
-import { registerCommand } from '../../system/command';
 import { configuration } from '../../system/configuration';
 import { debug } from '../../system/decorators/log';
 import { take } from '../../system/event';
 import { filterMap, flatten } from '../../system/iterable';
+import type { SubscriptionChangeEvent } from '../gk/account/subscriptionService';
 import type { ServerConnection } from '../gk/serverConnection';
-import type { CloudIntegrationsApi } from './authentication/cloudIntegrationsApi';
-import { supportedCloudIntegrationIds } from './authentication/models';
+import { supportedCloudIntegrationIds, toIntegrationId } from './authentication/models';
 import type {
 	HostingIntegration,
 	Integration,
+	IntegrationBase,
 	IntegrationKey,
 	IntegrationType,
 	IssueIntegration,
@@ -27,6 +27,7 @@ import type {
 	SupportedIssueIntegrationIds,
 	SupportedSelfHostedIntegrationIds,
 } from './integration';
+import type { IntegrationId } from './providers/models';
 import {
 	HostingIntegrationId,
 	isSelfHostedIntegrationId,
@@ -62,7 +63,7 @@ export class IntegrationService implements Disposable {
 			}),
 			authentication.onDidChangeSessions(this.onAuthenticationSessionsChanged, this),
 			container.subscription.onDidCheckIn(this.onUserCheckedIn, this),
-			...this.registerCommands(),
+			container.subscription.onDidChange(this.onDidChangeSubscription, this),
 		);
 	}
 
@@ -70,30 +71,26 @@ export class IntegrationService implements Disposable {
 		this._disposable?.dispose();
 	}
 
-	private registerCommands(): Disposable[] {
-		return [registerCommand(Commands.PlusManageCloudIntegrations, () => this.manageCloudIntegrations())];
-	}
-
 	private async syncCloudIntegrations(_options?: { force?: boolean }) {
+		let connectedProviders = new Set<IntegrationId>();
+
 		const session = await this.container.subscription.getAuthenticationSession();
-		let connectedProviders = new Set<string>();
 		if (session != null) {
-			const api = await this.getCloudIntegrationsApi();
-			const connectedProviderData = (await api.getConnectedProvidersData()) ?? [];
-			connectedProviders = new Set(connectedProviderData.map(p => p.provider));
+			const cloudIntegrations = await this.container.cloudIntegrations;
+			const connections = (await cloudIntegrations?.getConnections()) ?? [];
+			connectedProviders = new Set(connections.map(p => toIntegrationId[p.provider]));
 		}
+
 		for (const cloudIntegrationId of supportedCloudIntegrationIds) {
 			const integration = await this.get(cloudIntegrationId);
 			const isConnected = integration.maybeConnected ?? (await integration.isConnected());
 			if (connectedProviders.has(cloudIntegrationId)) {
-				if (isConnected) {
-					continue;
-				}
+				if (isConnected) continue;
+
 				await integration.connect();
 			} else {
-				if (!isConnected) {
-					continue;
-				}
+				if (!isConnected) continue;
+
 				await integration.disconnect({ silent: true });
 			}
 		}
@@ -103,8 +100,32 @@ export class IntegrationService implements Disposable {
 		void this.syncCloudIntegrations();
 	}
 
-	private async manageCloudIntegrations() {
-		await env.openExternal(this.connection.getGkDevAccountsUri('settings/integrations'));
+	private onDidChangeSubscription(e: SubscriptionChangeEvent) {
+		if (e.current?.account == null) {
+			void this.syncCloudIntegrations();
+		}
+	}
+
+	async manageCloudIntegrations(integrationId: IssueIntegrationId.Jira | undefined, source: Source | undefined) {
+		if (this.container.telemetry.enabled) {
+			this.container.telemetry.sendEvent(
+				'cloudIntegrations/settingsOpened',
+				{ 'integration.id': integrationId },
+				source,
+			);
+		}
+
+		const account = (await this.container.subscription.getSubscription()).account;
+		if (account == null) {
+			if (!(await this.container.subscription.loginOrSignUp(true, source))) return;
+		}
+
+		let query = 'source=gitlens';
+		if (integrationId != null) {
+			query += `&connect=${integrationId}`;
+		}
+
+		await env.openExternal(this.connection.getGkDevUri('settings/integrations', query));
 		take(
 			window.onDidChangeWindowState,
 			2,
@@ -123,21 +144,65 @@ export class IntegrationService implements Disposable {
 		}
 	}
 
-	connected(key: string): void {
+	connected(integration: IntegrationBase, key: string): void {
 		// Only fire events if the key is being connected for the first time
 		if (this._connectedCache.has(key)) return;
 
 		this._connectedCache.add(key);
-		this.container.telemetry.sendEvent('remoteProviders/connected', { 'remoteProviders.key': key });
+		if (this.container.telemetry.enabled) {
+			if (integration.type === 'hosting') {
+				if (supportedCloudIntegrationIds.includes(integration.id)) {
+					this.container.telemetry.sendEvent('cloudIntegrations/hosting/connected', {
+						'hostingProvider.provider': integration.id,
+						'hostingProvider.key': key,
+					});
+				} else {
+					this.container.telemetry.sendEvent('remoteProviders/connected', {
+						'hostingProvider.provider': integration.id,
+						'hostingProvider.key': key,
+
+						// Deprecated
+						'remoteProviders.key': key,
+					});
+				}
+			} else {
+				this.container.telemetry.sendEvent('cloudIntegrations/issue/connected', {
+					'issueProvider.provider': integration.id,
+					'issueProvider.key': key,
+				});
+			}
+		}
 
 		setTimeout(() => this._onDidChangeConnectionState.fire({ key: key, reason: 'connected' }), 250);
 	}
 
-	disconnected(key: string): void {
+	disconnected(integration: IntegrationBase, key: string): void {
 		// Probably shouldn't bother to fire the event if we don't already think we are connected, but better to be safe
 		// if (!_connectedCache.has(key)) return;
 		this._connectedCache.delete(key);
-		this.container.telemetry.sendEvent('remoteProviders/disconnected', { 'remoteProviders.key': key });
+		if (this.container.telemetry.enabled) {
+			if (integration.type === 'hosting') {
+				if (supportedCloudIntegrationIds.includes(integration.id)) {
+					this.container.telemetry.sendEvent('cloudIntegrations/hosting/disconnected', {
+						'hostingProvider.provider': integration.id,
+						'hostingProvider.key': key,
+					});
+				} else {
+					this.container.telemetry.sendEvent('remoteProviders/disconnected', {
+						'hostingProvider.provider': integration.id,
+						'hostingProvider.key': key,
+
+						// Deprecated
+						'remoteProviders.key': key,
+					});
+				}
+			} else {
+				this.container.telemetry.sendEvent('cloudIntegrations/issue/disconnected', {
+					'issueProvider.provider': integration.id,
+					'issueProvider.key': key,
+				});
+			}
+		}
 
 		setTimeout(() => this._onDidChangeConnectionState.fire({ key: key, reason: 'disconnected' }), 250);
 	}
@@ -217,23 +282,6 @@ export class IntegrationService implements Disposable {
 		}
 
 		return this._providersApi;
-	}
-
-	private _cloudIntegrationsApi: Promise<CloudIntegrationsApi> | undefined;
-	private async getCloudIntegrationsApi() {
-		if (this._cloudIntegrationsApi == null) {
-			const container = this.container;
-			const connection = this.connection;
-			async function load() {
-				return new (
-					await import(/* webpackChunkName: "integrations" */ './authentication/cloudIntegrationsApi')
-				).CloudIntegrationsApi(container, connection);
-			}
-
-			this._cloudIntegrationsApi = load();
-		}
-
-		return this._cloudIntegrationsApi;
 	}
 
 	getByRemote(remote: GitRemote): Promise<HostingIntegration | undefined> {

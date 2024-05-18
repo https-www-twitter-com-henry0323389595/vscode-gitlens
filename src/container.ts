@@ -26,6 +26,7 @@ import { AccountAuthenticationProvider } from './plus/gk/account/authenticationP
 import { OrganizationService } from './plus/gk/account/organizationService';
 import { SubscriptionService } from './plus/gk/account/subscriptionService';
 import { ServerConnection } from './plus/gk/serverConnection';
+import type { CloudIntegrationService } from './plus/integrations/authentication/cloudIntegrationService';
 import { IntegrationAuthenticationService } from './plus/integrations/authentication/integrationAuthentication';
 import { IntegrationService } from './plus/integrations/integrationService';
 import type { GitHubApi } from './plus/integrations/providers/github/github';
@@ -73,6 +74,7 @@ import { ContributorsView } from './views/contributorsView';
 import { DraftsView } from './views/draftsView';
 import { FileHistoryView } from './views/fileHistoryView';
 import { LineHistoryView } from './views/lineHistoryView';
+import { PullRequestView } from './views/pullRequestView';
 import { RemotesView } from './views/remotesView';
 import { RepositoriesView } from './views/repositoriesView';
 import { SearchAndCompareView } from './views/searchAndCompareView';
@@ -274,6 +276,7 @@ export class Container {
 		this._disposables.push((this._patchDetailsView = registerPatchDetailsWebviewView(this._webviews)));
 		this._disposables.push((this._graphDetailsView = registerGraphDetailsWebviewView(this._webviews)));
 		this._disposables.push((this._commitsView = new CommitsView(this)));
+		this._disposables.push((this._pullRequestView = new PullRequestView(this)));
 		this._disposables.push((this._fileHistoryView = new FileHistoryView(this)));
 		this._disposables.push((this._lineHistoryView = new LineHistoryView(this)));
 		this._disposables.push((this._branchesView = new BranchesView(this)));
@@ -289,7 +292,7 @@ export class Container {
 		this._disposables.push((this._homeView = registerHomeWebviewView(this._webviews)));
 		this._disposables.push((this._accountView = registerAccountWebviewView(this._webviews)));
 
-		if (configuration.get('focus.experimental.indicators.enabled')) {
+		if (configuration.get('launchpad.indicator.enabled')) {
 			this._disposables.push((this._focusIndicator = new FocusIndicator(this, this._focusProvider)));
 		}
 
@@ -307,10 +310,10 @@ export class Container {
 					}
 				}
 
-				if (configuration.changed(e, 'focus.experimental.indicators.enabled')) {
+				if (configuration.changed(e, 'launchpad.indicator.enabled')) {
 					this._focusIndicator?.dispose();
 					this._focusIndicator = undefined;
-					if (configuration.get('focus.experimental.indicators.enabled')) {
+					if (configuration.get('launchpad.indicator.enabled')) {
 						this._disposables.push((this._focusIndicator = new FocusIndicator(this, this._focusProvider)));
 					}
 				}
@@ -429,6 +432,29 @@ export class Container {
 		}
 
 		return this._cache;
+	}
+
+	private _cloudIntegrations: Promise<CloudIntegrationService | undefined> | undefined;
+	get cloudIntegrations() {
+		if (this._cloudIntegrations == null) {
+			async function load(this: Container) {
+				try {
+					const cloudIntegrations = new (
+						await import(
+							/* webpackChunkName: "integrations" */ './plus/integrations/authentication/cloudIntegrationService'
+						)
+					).CloudIntegrationService(this, this._connection);
+					return cloudIntegrations;
+				} catch (ex) {
+					Logger.error(ex);
+					return undefined;
+				}
+			}
+
+			this._cloudIntegrations = load.call(this);
+		}
+
+		return this._cloudIntegrations;
 	}
 
 	private _drafts: DraftService | undefined;
@@ -675,6 +701,11 @@ export class Container {
 	@memoize()
 	get prereleaseOrDebugging() {
 		return this._prerelease || this.debugging;
+	}
+
+	private readonly _pullRequestView: PullRequestView;
+	get pullRequestView() {
+		return this._pullRequestView;
 	}
 
 	private readonly _rebaseEditor: RebaseEditorProvider;

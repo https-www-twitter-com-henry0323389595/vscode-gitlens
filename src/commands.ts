@@ -1,6 +1,7 @@
 import './commands/addAuthors';
 import './commands/browseRepoAtRevision';
 import './commands/closeUnchangedFiles';
+import './commands/cloudIntegrations';
 import './commands/compareWith';
 import './commands/copyCurrentBranch';
 import './commands/copyDeepLink';
@@ -37,7 +38,6 @@ import './commands/openFileOnRemote';
 import './commands/openFileAtRevision';
 import './commands/openFileAtRevisionFrom';
 import './commands/openOnRemote';
-import './commands/openIssueOnRemote';
 import './commands/openPullRequestOnRemote';
 import './commands/openRepoOnRemote';
 import './commands/openRevisionFile';

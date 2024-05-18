@@ -1,4 +1,4 @@
-import type { AuthenticationSession } from 'vscode';
+import type { AuthenticationSession, CancellationToken } from 'vscode';
 import type { Account } from '../../../git/models/author';
 import type { DefaultBranch } from '../../../git/models/defaultBranch';
 import type { IssueOrPullRequest, SearchedIssue } from '../../../git/models/issue';
@@ -36,14 +36,6 @@ export class BitbucketIntegration extends HostingIntegration<
 
 	protected get apiBaseUrl(): string {
 		return 'https://api.bitbucket.org/2.0';
-	}
-
-	// TODO: implement
-	protected override async getProviderCurrentAccount(
-		_session: AuthenticationSession,
-		_options?: { avatarSize?: number },
-	): Promise<Account | undefined> {
-		return Promise.resolve(undefined);
 	}
 
 	protected override async mergeProviderPullRequest(
@@ -116,6 +108,7 @@ export class BitbucketIntegration extends HostingIntegration<
 	protected override async getProviderRepositoryMetadata(
 		_session: AuthenticationSession,
 		_repo: BitbucketRepositoryDescriptor,
+		_cancellation?: CancellationToken,
 	): Promise<RepositoryMetadata | undefined> {
 		return Promise.resolve(undefined);
 	}

@@ -17,6 +17,7 @@ import type {
 	Trello,
 } from '@gitkraken/provider-apis';
 import {
+	EntityIdentifierUtils,
 	GitBuildStatusState,
 	GitProviderUtils,
 	GitPullRequestMergeableState,
@@ -26,7 +27,12 @@ import {
 import type { Account as UserAccount } from '../../../git/models/author';
 import type { IssueMember, SearchedIssue } from '../../../git/models/issue';
 import { RepositoryAccessLevel } from '../../../git/models/issue';
-import type { PullRequest, PullRequestMember, PullRequestReviewer } from '../../../git/models/pullRequest';
+import type {
+	PullRequest,
+	PullRequestMember,
+	PullRequestRefs,
+	PullRequestReviewer,
+} from '../../../git/models/pullRequest';
 import {
 	PullRequestMergeableState,
 	PullRequestReviewDecision,
@@ -34,17 +40,21 @@ import {
 	PullRequestStatusCheckRollupState,
 } from '../../../git/models/pullRequest';
 import type { ProviderReference } from '../../../git/models/remoteProvider';
+import type { RepositoryIdentityDescriptor } from '../../../gk/models/repositoryIdentities';
+import type { EnrichableItem } from '../../focus/enrichmentService';
+import { getEntityIdentifierInput } from './utils';
 
 export type ProviderAccount = Account;
 export type ProviderReposInput = (string | number)[] | GetRepoInput[];
 export type ProviderRepoInput = GetRepoInput;
 export type ProviderPullRequest = GitPullRequest;
-export type toProviderPullRequestWithUniqueId = PullRequestWithUniqueID;
 export type ProviderRepository = GitRepository;
 export type ProviderIssue = Issue;
 export type ProviderEnterpriseOptions = EnterpriseOptions;
 export type ProviderJiraProject = JiraProject;
 export type ProviderJiraResource = JiraResource;
+export const ProviderPullRequestReviewState = GitPullRequestReviewState;
+export const ProviderBuildStatusState = GitBuildStatusState;
 
 export type IntegrationId = HostingIntegrationId | IssueIntegrationId | SelfHostedIntegrationId;
 
@@ -657,7 +667,7 @@ export function toProviderPullRequest(pr: PullRequest): ProviderPullRequest {
 export function toProviderPullRequestWithUniqueId(pr: PullRequest): PullRequestWithUniqueID {
 	return {
 		...toProviderPullRequest(pr),
-		uuid: pr.nodeId!,
+		uuid: EntityIdentifierUtils.encode(getEntityIdentifierInput(pr)),
 	};
 }
 
@@ -674,5 +684,18 @@ export function toProviderAccount(account: PullRequestMember | IssueMember): Pro
 }
 
 export type ProviderActionablePullRequest = ActionablePullRequest;
+
+export type EnrichablePullRequest = ProviderPullRequest & {
+	uuid: string;
+	type: 'pullrequest';
+	provider: ProviderReference;
+	enrichable: EnrichableItem;
+	repoIdentity: RequireSomeWithProps<
+		RequireSome<RepositoryIdentityDescriptor<string>, 'remote' | 'provider'>,
+		'provider',
+		'id' | 'domain' | 'repoDomain' | 'repoName'
+	>;
+	refs?: PullRequestRefs;
+};
 
 export const getActionablePullRequests = GitProviderUtils.getActionablePullRequests;

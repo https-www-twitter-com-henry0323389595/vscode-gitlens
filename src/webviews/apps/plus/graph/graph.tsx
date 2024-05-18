@@ -5,6 +5,7 @@ import { render, unmountComponentAtNode } from 'react-dom';
 import type { GitGraphRowType } from '../../../../git/models/graph';
 import type { SearchQuery } from '../../../../git/search';
 import type {
+	DidSearchParams,
 	GraphAvatars,
 	GraphColumnsConfig,
 	GraphExcludedRef,
@@ -20,7 +21,6 @@ import {
 	ChooseRepositoryCommand,
 	DidChangeAvatarsNotification,
 	DidChangeColumnsNotification,
-	DidChangeFocusNotification,
 	DidChangeGraphConfigurationNotification,
 	DidChangeNotification,
 	DidChangeRefsMetadataNotification,
@@ -30,7 +30,6 @@ import {
 	DidChangeScrollMarkersNotification,
 	DidChangeSelectionNotification,
 	DidChangeSubscriptionNotification,
-	DidChangeWindowFocusNotification,
 	DidChangeWorkingTreeNotification,
 	DidFetchNotification,
 	DidSearchNotification,
@@ -39,6 +38,7 @@ import {
 	GetMissingAvatarsCommand,
 	GetMissingRefsMetadataCommand,
 	GetMoreRowsCommand,
+	OpenPullRequestDetailsCommand,
 	SearchOpenInViewCommand,
 	SearchRequest,
 	UpdateColumnsCommand,
@@ -54,6 +54,7 @@ import { debug } from '../../../../system/decorators/log';
 import { debounce } from '../../../../system/function';
 import { getLogScope, setLogScopeExit } from '../../../../system/logger.scope';
 import type { IpcMessage, IpcNotification } from '../../../protocol';
+import { DidChangeHostWindowFocusNotification } from '../../../protocol';
 import { App } from '../../shared/appBase';
 import type { ThemeChangeEvent } from '../../shared/theme';
 import { GraphWrapper } from './GraphWrapper';
@@ -108,6 +109,7 @@ export class GraphApp extends App<State> {
 					onMissingAvatars={(...params) => this.onGetMissingAvatars(...params)}
 					onMissingRefsMetadata={(...params) => this.onGetMissingRefsMetadata(...params)}
 					onMoreRows={(...params) => this.onGetMoreRows(...params)}
+					onOpenPullRequest={(...params) => this.onOpenPullRequest(...params)}
 					onSearch={debounce<GraphApp['onSearch']>((search, options) => this.onSearch(search, options), 250)}
 					onSearchPromise={(...params) => this.onSearchPromise(...params)}
 					onSearchOpenInView={(...params) => this.onSearchOpenInView(...params)}
@@ -156,13 +158,10 @@ export class GraphApp extends App<State> {
 				this.state.avatars = msg.params.avatars;
 				this.setState(this.state, DidChangeAvatarsNotification);
 				break;
-			case DidChangeFocusNotification.is(msg):
-				window.dispatchEvent(new CustomEvent(msg.params.focused ? 'webview-focus' : 'webview-blur'));
-				break;
 
-			case DidChangeWindowFocusNotification.is(msg):
+			case DidChangeHostWindowFocusNotification.is(msg):
 				this.state.windowFocused = msg.params.focused;
-				this.setState(this.state, DidChangeWindowFocusNotification);
+				this.setState(this.state, DidChangeHostWindowFocusNotification);
 				break;
 
 			case DidChangeColumnsNotification.is(msg):
@@ -276,11 +275,7 @@ export class GraphApp extends App<State> {
 				break;
 
 			case DidSearchNotification.is(msg):
-				this.state.searchResults = msg.params.results;
-				if (msg.params.selectedRows != null) {
-					this.state.selectedRows = msg.params.selectedRows;
-				}
-				this.setState(this.state, DidSearchNotification);
+				this.updateSearchResultState(msg.params);
 				break;
 
 			case DidChangeSelectionNotification.is(msg):
@@ -568,20 +563,31 @@ export class GraphApp extends App<State> {
 		this.sendCommand(GetMoreRowsCommand, { id: sha });
 	}
 
-	private onSearch(search: SearchQuery | undefined, options?: { limit?: number }) {
+	onOpenPullRequest(pr: NonNullable<NonNullable<State['branchState']>['pr']>): void {
+		this.sendCommand(OpenPullRequestDetailsCommand, { id: pr.id });
+	}
+
+	private async onSearch(search: SearchQuery | undefined, options?: { limit?: number }) {
 		if (search == null) {
 			this.state.searchResults = undefined;
 		}
-		this.sendCommand(SearchRequest, { search: search, limit: options?.limit });
+		try {
+			const rsp = await this.sendRequest(SearchRequest, { search: search, limit: options?.limit });
+			this.updateSearchResultState(rsp);
+		} catch {
+			this.state.searchResults = undefined;
+		}
 	}
 
 	private async onSearchPromise(search: SearchQuery, options?: { limit?: number; more?: boolean }) {
 		try {
-			return await this.sendRequest(SearchRequest, {
+			const rsp = await this.sendRequest(SearchRequest, {
 				search: search,
 				limit: options?.limit,
 				more: options?.more,
 			});
+			this.updateSearchResultState(rsp);
+			return rsp;
 		} catch {
 			return undefined;
 		}
@@ -627,6 +633,14 @@ export class GraphApp extends App<State> {
 		return () => {
 			this.updateStateCallback = undefined;
 		};
+	}
+
+	private updateSearchResultState(params: DidSearchParams) {
+		this.state.searchResults = params.results;
+		if (params.selectedRows != null) {
+			this.state.selectedRows = params.selectedRows;
+		}
+		this.setState(this.state, DidSearchNotification);
 	}
 }
 

@@ -1,10 +1,14 @@
 import type { TextDocumentShowOptions } from 'vscode';
 import type { Autolink } from '../../annotations/autolinks';
 import type { Config, DateStyle } from '../../config';
+import type { Sources } from '../../constants';
 import type { GitCommitIdentityShape, GitCommitStats } from '../../git/models/commit';
 import type { GitFileChangeShape } from '../../git/models/file';
 import type { IssueOrPullRequest } from '../../git/models/issue';
 import type { PullRequestShape } from '../../git/models/pullRequest';
+import type { Repository } from '../../git/models/repository';
+import type { Draft, DraftVisibility } from '../../gk/models/drafts';
+import type { Change, DraftUserSelection } from '../../plus/webviews/patchDetails/protocol';
 import type { DateTimeFormat } from '../../system/date';
 import type { Serialized } from '../../system/serialize';
 import type { IpcScope, WebviewState } from '../protocol';
@@ -36,6 +40,7 @@ export interface CommitDetails extends CommitSummary {
 
 export interface Preferences {
 	autolinksExpanded: boolean;
+	pullRequestExpanded: boolean;
 	avatars: boolean;
 	dateFormat: DateTimeFormat | string;
 	dateStyle: DateStyle;
@@ -43,7 +48,7 @@ export interface Preferences {
 	indent: number | undefined;
 	indentGuides: 'none' | 'onHover' | 'always';
 }
-export type UpdateablePreferences = Partial<Pick<Preferences, 'autolinksExpanded' | 'files'>>;
+export type UpdateablePreferences = Partial<Pick<Preferences, 'autolinksExpanded' | 'pullRequestExpanded' | 'files'>>;
 
 export interface WipChange {
 	branchName: string;
@@ -68,10 +73,16 @@ export interface Wip {
 	repositoryCount: number;
 	branch?: GitBranchShape;
 	pullRequest?: PullRequestShape;
+	codeSuggestions?: Serialized<Draft>[];
 	repo: {
+		uri: string;
 		name: string;
 		path: string;
 	};
+}
+
+export interface DraftState {
+	inReview: boolean;
 }
 
 export interface State extends WebviewState {
@@ -94,11 +105,30 @@ export interface State extends WebviewState {
 	autolinkedIssues?: IssueOrPullRequest[];
 	pullRequest?: PullRequestShape;
 	wip?: Wip;
+	inReview?: boolean;
+	hasConnectedJira: boolean;
+	hasAccount: boolean;
 }
 
 export type ShowCommitDetailsViewCommandArgs = string[];
 
+export interface ShowWipArgs {
+	type: 'wip';
+	inReview?: boolean;
+	repository?: Repository;
+	source: Sources;
+}
+
 // COMMANDS
+
+export interface SuggestChangesParams {
+	title: string;
+	description?: string;
+	visibility: DraftVisibility;
+	changesets: Record<string, Change>;
+	userSelections: DraftUserSelection[] | undefined;
+}
+export const SuggestChangesCommand = new IpcCommand<SuggestChangesParams>(scope, 'commit/suggestChanges');
 
 export interface ExecuteCommitActionsParams {
 	action: 'graph' | 'more' | 'scm' | 'sha';
@@ -148,11 +178,26 @@ export interface CreatePatchFromWipParams {
 }
 export const CreatePatchFromWipCommand = new IpcCommand<CreatePatchFromWipParams>(scope, 'wip/createPatch');
 
+export interface ChangeReviewModeParams {
+	inReview: boolean;
+}
+export const ChangeReviewModeCommand = new IpcCommand<ChangeReviewModeParams>(scope, 'wip/changeReviewMode');
+
+export interface ShowCodeSuggestionParams {
+	id: string;
+}
+export const ShowCodeSuggestionCommand = new IpcCommand<ShowCodeSuggestionParams>(scope, 'wip/showCodeSuggestion');
+
 export const FetchCommand = new IpcCommand(scope, 'fetch');
 export const PublishCommand = new IpcCommand(scope, 'publish');
 export const PushCommand = new IpcCommand(scope, 'push');
 export const PullCommand = new IpcCommand(scope, 'pull');
 export const SwitchCommand = new IpcCommand(scope, 'switch');
+
+export const OpenPullRequestChangesCommand = new IpcCommand(scope, 'openPullRequestChanges');
+export const OpenPullRequestComparisonCommand = new IpcCommand(scope, 'openPullRequestComparison');
+export const OpenPullRequestOnRemoteCommand = new IpcCommand(scope, 'openPullRequestOnRemote');
+export const OpenPullRequestDetailsCommand = new IpcCommand(scope, 'openPullRequestDetails');
 
 // REQUESTS
 
@@ -171,7 +216,7 @@ export interface DidChangeParams {
 }
 export const DidChangeNotification = new IpcNotification<DidChangeParams>(scope, 'didChange', true);
 
-export type DidChangeWipStateParams = Pick<Serialized<State>, 'wip'>;
+export type DidChangeWipStateParams = Pick<Serialized<State>, 'wip' | 'inReview'>;
 export const DidChangeWipStateNotification = new IpcNotification<DidChangeWipStateParams>(scope, 'didChange/wip');
 
 export type DidChangeOrgSettings = Pick<Serialized<State>, 'orgSettings'>;
@@ -179,3 +224,24 @@ export const DidChangeOrgSettingsNotification = new IpcNotification<DidChangeOrg
 	scope,
 	'org/settings/didChange',
 );
+
+export interface DidChangeConnectedJiraParams {
+	hasConnectedJira: boolean;
+}
+export const DidChangeConnectedJiraNotification = new IpcNotification<DidChangeConnectedJiraParams>(
+	scope,
+	'didChange/jira',
+);
+
+export interface DidChangeHasAccountParams {
+	hasAccount: boolean;
+}
+export const DidChangeHasAccountNotification = new IpcNotification<DidChangeHasAccountParams>(
+	scope,
+	'didChange/account',
+);
+
+export interface DidChangeDraftStateParams {
+	inReview: boolean;
+}
+export const DidChangeDraftStateNotification = new IpcNotification<DidChangeDraftStateParams>(scope, 'didChange/patch');

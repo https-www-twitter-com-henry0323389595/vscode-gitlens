@@ -62,8 +62,13 @@ export const ClearQuickInputButton: QuickInputButton = {
 	tooltip: 'Clear',
 };
 
+export const FeedbackQuickInputButton: QuickInputButton = {
+	iconPath: new ThemeIcon('feedback'),
+	tooltip: 'Give Us Feedback',
+};
+
 export const FetchQuickInputButton: QuickInputButton = {
-	iconPath: new ThemeIcon('sync'),
+	iconPath: new ThemeIcon('gitlens-repo-fetch'),
 	tooltip: 'Fetch',
 };
 
@@ -114,7 +119,27 @@ export const PickCommitToggleQuickInputButton = class extends ToggleQuickInputBu
 
 export const MergeQuickInputButton: QuickInputButton = {
 	iconPath: new ThemeIcon('merge'),
-	tooltip: 'Merge',
+	tooltip: 'Merge...',
+};
+
+export const OpenOnGitHubQuickInputButton: QuickInputButton = {
+	iconPath: new ThemeIcon('globe'),
+	tooltip: 'Open on GitHub',
+};
+
+export const OpenOnWebQuickInputButton: QuickInputButton = {
+	iconPath: new ThemeIcon('globe'),
+	tooltip: 'Open on gitkraken.dev',
+};
+
+export const OpenInEditorQuickInputButton: QuickInputButton = {
+	iconPath: new ThemeIcon('link-external'),
+	tooltip: 'Open in Editor',
+};
+
+export const LaunchpadSettingsQuickInputButton: QuickInputButton = {
+	iconPath: new ThemeIcon('gear'),
+	tooltip: 'Launchpad Settings',
 };
 
 export const PinQuickInputButton: QuickInputButton = {

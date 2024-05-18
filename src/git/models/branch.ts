@@ -14,8 +14,7 @@ import type { GitRemote } from './remote';
 import type { Repository } from './repository';
 import { getUpstreamStatus } from './status';
 
-const whitespaceRegex = /\s/;
-const detachedHEADRegex = /^(?=.*\bHEAD\b)?(?=.*\bdetached\b).*$/;
+const detachedHEADRegex = /^(HEAD|\(.*\))$/;
 
 export interface GitTrackingState {
 	ahead: number;
@@ -105,6 +104,7 @@ export class GitBranch implements GitBranchReference {
 	async getAssociatedPullRequest(options?: {
 		avatarSize?: number;
 		include?: PullRequestState[];
+		expiryOverride?: boolean | number;
 	}): Promise<PullRequest | undefined> {
 		const remote = await this.getRemote();
 		if (remote?.provider == null) return undefined;
@@ -234,7 +234,8 @@ export function isBranch(branch: any): branch is GitBranch {
 export function isDetachedHead(name: string): boolean {
 	// If there is whitespace in the name assume this is not a valid branch name
 	// Deals with detached HEAD states
-	return whitespaceRegex.test(name) || detachedHEADRegex.test(name);
+	name = name.trim();
+	return name.length ? detachedHEADRegex.test(name) : true;
 }
 
 export function isOfBranchRefType(branch: GitReference | undefined) {

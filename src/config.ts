@@ -87,16 +87,20 @@ export interface Config {
 		readonly command: string | null;
 		readonly dismissOnEscape: boolean;
 	};
-	readonly focus: {
+	readonly launchpad: {
 		readonly allowMultiple: boolean;
-		readonly experimental: {
-			readonly indicators: {
-				readonly enabled: boolean;
-				readonly openQuickFocus: boolean;
-				readonly data: {
-					readonly enabled: boolean;
-					readonly refreshRate: number;
-				};
+		readonly ignoredRepositories: string[];
+		readonly staleThreshold: number | null;
+		readonly indicator: {
+			readonly enabled: boolean;
+			readonly openInEditor: boolean;
+			readonly icon: 'default' | 'group';
+			readonly label: false | 'item';
+			readonly useColors: boolean;
+			readonly groups: ('mergeable' | 'blocked' | 'needs-review' | 'follow-up')[];
+			readonly polling: {
+				enabled: boolean;
+				interval: number;
 			};
 		};
 	};
@@ -472,6 +476,7 @@ export interface MenuConfig {
 		| {
 				readonly authors: boolean;
 				readonly generateCommitMessage: boolean;
+				readonly patch: boolean;
 				readonly graph: boolean;
 		  };
 	readonly scmGroupInline:
@@ -484,6 +489,7 @@ export interface MenuConfig {
 		| {
 				readonly compare: boolean;
 				readonly openClose: boolean;
+				readonly patch: boolean;
 				readonly stash: boolean;
 		  };
 	readonly scmItemInline:
@@ -602,10 +608,11 @@ interface ViewsConfigs {
 	readonly commits: CommitsViewConfig;
 	readonly commitDetails: CommitDetailsViewConfig;
 	readonly contributors: ContributorsViewConfig;
-	readonly drafts: object; // TODO@eamodio add real types
+	readonly drafts: DraftsViewConfig;
 	readonly fileHistory: FileHistoryViewConfig;
 	readonly lineHistory: LineHistoryViewConfig;
 	readonly patchDetails: PatchDetailsViewConfig;
+	readonly pullRequest: PullRequestViewConfig;
 	readonly remotes: RemotesViewConfig;
 	readonly repositories: RepositoriesViewConfig;
 	readonly searchAndCompare: SearchAndCompareViewConfig;
@@ -625,6 +632,7 @@ export const viewsConfigKeys: ViewsConfigKeys[] = [
 	'fileHistory',
 	'lineHistory',
 	'patchDetails',
+	'pullRequest',
 	'remotes',
 	'repositories',
 	'searchAndCompare',
@@ -693,6 +701,14 @@ export interface ContributorsViewConfig {
 	readonly showStatistics: boolean;
 }
 
+export interface DraftsViewConfig {
+	readonly avatars: boolean;
+	readonly branches: undefined;
+	readonly files: ViewsFilesConfig;
+	readonly pullRequests: undefined;
+	readonly reveal: undefined;
+}
+
 export interface FileHistoryViewConfig {
 	readonly avatars: boolean;
 	readonly files: ViewsFilesConfig;
@@ -704,6 +720,15 @@ export interface FileHistoryViewConfig {
 
 export interface LineHistoryViewConfig {
 	readonly avatars: boolean;
+}
+
+export interface PullRequestViewConfig {
+	readonly avatars: boolean;
+	readonly branches: undefined;
+	readonly files: ViewsFilesConfig;
+	readonly pullRequests: undefined;
+	readonly reveal: undefined;
+	readonly showBranchComparison: undefined;
 }
 
 export interface RemotesViewConfig {

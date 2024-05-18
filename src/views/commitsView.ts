@@ -148,9 +148,9 @@ export class CommitsViewNode extends RepositoriesSubscribeableNode<CommitsView, 
 						this.view,
 						this,
 						createCommand(Commands.ShowGraph, 'Show Commit Graph'),
-						'Visualize commits on the Commit Graph ✨',
+						'Visualize commits on the Commit Graph',
 						undefined,
-						'Visualize commits on the Commit Graph ✨',
+						'Visualize commits on the Commit Graph',
 						new ThemeIcon('gitlens-graph'),
 				  )
 				: undefined;
@@ -205,7 +205,7 @@ export class CommitsView extends ViewBase<'commits', CommitsViewNode, CommitsVie
 	}
 
 	override get canSelectMany(): boolean {
-		return true;
+		return this.container.prereleaseOrDebugging;
 	}
 
 	private readonly _state: CommitsViewState = { filterCommits: new Map<string, GitUser[] | undefined>() };

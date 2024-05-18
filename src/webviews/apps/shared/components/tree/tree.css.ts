@@ -23,11 +23,16 @@ export const treeItemStyles = [
 			align-items: center;
 			justify-content: space-between;
 			font-size: var(--vscode-font-size);
-			color: var(--vscode-foreground);
+			color: var(--gitlens-tree-foreground, var(--vscode-foreground));
 
 			content-visibility: auto;
 			contain-intrinsic-size: auto 2.2rem;
 			cursor: pointer;
+		}
+
+		:host(:hover),
+		:host(:focus-within) {
+			content-visibility: visible;
 		}
 
 		:host([aria-hidden='true']) {
@@ -85,6 +90,10 @@ export const treeItemStyles = [
 			display: inline-block;
 			width: 1.6rem;
 			text-align: center;
+			height: 2.2rem;
+			line-height: 2.2rem;
+			pointer-events: none;
+			vertical-align: text-bottom;
 		}
 
 		slot[name='icon']::slotted(*) {
@@ -98,6 +107,10 @@ export const treeItemStyles = [
 			width: var(--tree-connector-size);
 			text-align: center;
 			flex: none;
+			height: 2.2rem;
+			line-height: 2.2rem;
+			pointer-events: none;
+			vertical-align: text-bottom;
 		}
 
 		.node:last-of-type {
@@ -128,7 +141,11 @@ export const treeItemStyles = [
 		}
 
 		.branch {
+			display: inline-block;
 			margin-right: 0.6rem;
+			height: 2.2rem;
+			line-height: 2.2rem;
+			vertical-align: text-bottom;
 		}
 
 		.text {
@@ -149,6 +166,7 @@ export const treeItemStyles = [
 			opacity: 0.7;
 			font-size: 0.9em;
 			margin-left: 0.3rem;
+			pointer-events: none;
 		}
 
 		.actions {

@@ -148,16 +148,7 @@ export class OrganizationService implements Disposable {
 		options?: { force?: boolean },
 	): Promise<FullOrganization | undefined> {
 		if (!this._fullOrganizations?.has(id) || options?.force === true) {
-			const session = await this.container.subscription.getAuthenticationSession();
-
-			const rsp = await this.connection.fetchApi(
-				`organization/${id}`,
-				{
-					method: 'GET',
-				},
-				{ token: session?.accessToken },
-			);
-
+			const rsp = await this.connection.fetchApi(`organization/${id}`, { method: 'GET' });
 			if (!rsp.ok) {
 				Logger.error(
 					'',
@@ -178,13 +169,25 @@ export class OrganizationService implements Disposable {
 	}
 
 	@gate()
-	async getOrganizationMembers(id: string, options?: { force?: boolean }): Promise<OrganizationMember[]> {
-		const organization = await this.getFullOrganization(id, options);
-		if (organization != null) {
-			return organization.members;
+	async getMembers(
+		organizationId?: string | undefined,
+		options?: { force?: boolean },
+	): Promise<OrganizationMember[]> {
+		if (organizationId == null) {
+			organizationId = await this.getActiveOrganizationId();
+			if (organizationId == null) return [];
 		}
 
-		return [];
+		const organization = await this.getFullOrganization(organizationId, options);
+		return organization?.members ?? [];
+	}
+
+	async getMemberById(id: string, organizationId: string): Promise<OrganizationMember | undefined> {
+		return (await this.getMembers(organizationId)).find(m => m.id === id);
+	}
+
+	async getMembersByIds(ids: string[], organizationId: string): Promise<OrganizationMember[]> {
+		return (await this.getMembers(organizationId)).filter(m => ids.includes(m.id));
 	}
 
 	private async getActiveOrganizationId(cached = true): Promise<string | undefined> {
@@ -206,16 +209,7 @@ export class OrganizationService implements Disposable {
 		if (id == null) return undefined;
 
 		if (!this._organizationSettings?.has(id) || options?.force === true) {
-			const session = await this.container.subscription.getAuthenticationSession();
-
-			const rsp = await this.connection.fetchApi(
-				`v1/organizations/settings`,
-				{
-					method: 'GET',
-				},
-				{ token: session?.accessToken },
-			);
-
+			const rsp = await this.connection.fetchApi(`v1/organizations/settings`, { method: 'GET' });
 			if (!rsp.ok) {
 				Logger.error(
 					'',

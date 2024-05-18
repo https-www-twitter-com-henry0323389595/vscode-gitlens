@@ -11,9 +11,12 @@ import {
 import type { IpcMessage } from '../../protocol';
 import { ExecuteCommand } from '../../protocol';
 import { App } from '../shared/appBase';
+import type { GlFeatureBadge } from '../shared/components/feature-badge';
 import { DOM } from '../shared/dom';
 import '../shared/components/button';
 import '../shared/components/code-icon';
+import '../shared/components/feature-badge';
+import '../shared/components/overlays/tooltip';
 
 export class HomeApp extends App<State> {
 	constructor() {
@@ -57,8 +60,11 @@ export class HomeApp extends App<State> {
 
 			case DidChangeSubscription.is(msg):
 				this.state.promoStates = msg.params.promoStates;
+				this.state.subscription = msg.params.subscription;
 				this.setState(this.state);
 				this.updatePromos();
+				this.updateSourceAndSubscription();
+
 				break;
 
 			case DidChangeOrgSettings.is(msg):
@@ -144,7 +150,18 @@ export class HomeApp extends App<State> {
 			orgSettings: { drafts },
 		} = this.state;
 
-		setElementVisibility('org-settings-drafts', drafts);
+		for (const el of document.querySelectorAll<HTMLElement>('[data-org-requires="drafts"]')) {
+			setElementVisibility(el, drafts);
+		}
+	}
+
+	private updateSourceAndSubscription() {
+		const { subscription } = this.state;
+		const els = document.querySelectorAll<GlFeatureBadge>('gl-feature-badge');
+		for (const el of els) {
+			el.source = { source: 'home', detail: 'badge' };
+			el.subscription = subscription;
+		}
 	}
 
 	private updateCollapsedSections(toggle = this.state.walkthroughCollapsed) {
@@ -154,6 +171,7 @@ export class HomeApp extends App<State> {
 	private updateState() {
 		this.updateNoRepo();
 		this.updatePromos();
+		this.updateSourceAndSubscription();
 		this.updateOrgSettings();
 		this.updateCollapsedSections();
 	}
